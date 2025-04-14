@@ -59,15 +59,18 @@ module access_control::rbac {
         account: address,
     }    
 
+    /// Register a new role
     public fun register_role<RoleId>(account: &signer): (ManageCapability<RoleId>, RemoveCapability<RoleId>) {
         register_role_internal(account, 0)
     }
 
+    // Register a new role with some expired time.
     public fun register_role_with_ttl<RoleId>(account: &signer, ttl:u64): (ManageCapability<RoleId>, RemoveCapability<RoleId>) {
         register_role_internal(account, ttl)
     }    
 
-    public fun remove_role<RoleId>(_cap:RemoveCapability<RoleId>) acquires RoleStore {
+    /// Remove role
+    public fun remove_role<RoleId>(cap:RemoveCapability<RoleId>) acquires RoleStore {
         let r_address = role_address<RoleId>();
         assert!(exists<RoleStore<RoleId>>(r_address), error::not_found(EROLE_ID_NOT_REGISTERED));
         let RoleStore<RoleId> {expired:_, has_role, grant_events, revoke_events} = move_from<RoleStore<RoleId>>(r_address);
@@ -75,7 +78,7 @@ module access_control::rbac {
         event::destroy_handle(grant_events);
         event::destroy_handle(revoke_events);
 
-        let RemoveCapability {} = _cap;
+        let RemoveCapability {} = cap;
     }
 
     ///Grant an existing role from the user. If role has been already granted error is thrown
@@ -233,7 +236,7 @@ module access_control::rbac {
 
         let ManageCapability<Role_A> {} = manage_cap;
         let RemoveCapability<Role_A> {} = remove_cap;
-    }    
+    }
 
     #[test(deployer = @access_control, user1 = @0x987, user2 = @0x876)]
     fun test_grant_role(deployer: &signer, user1 : address, user2 : address) acquires RoleStore{
@@ -252,8 +255,24 @@ module access_control::rbac {
 
         let ManageCapability<Role_B> {} = manage_cap_b;
         let RemoveCapability<Role_B> {} = remove_cap_b;        
-
     }
+
+    #[test(deployer = @access_control, user1 = @0x987)]
+    fun test_remove(deployer: &signer, user1 : address) acquires RoleStore{
+        let deployer_addr = signer::address_of(deployer);
+        account::create_account_for_test(deployer_addr);
+        let (manage_cap_a, remove_cap_a) = register_role<Role_A>(deployer);
+        grant_role<Role_A>(user1, &manage_cap_a); // grant role A to user1
+
+        assert_has_role<Role_A>(user1);
+        assert!(has_role<Role_A>(user1), 1);
+
+        remove_role<Role_A>(remove_cap_a);
+
+        let ManageCapability<Role_A> {} = manage_cap_a;
+        let RemoveCapability<Role_A> {} = remove_cap_a;
+    }
+
 
     #[test(deployer = @access_control, user1 = @0x987, user2 = @0x876)]
     fun test_grant_revoke_role(deployer: &signer, user1 : address, user2 : address) acquires RoleStore{
