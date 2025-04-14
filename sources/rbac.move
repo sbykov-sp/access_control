@@ -65,8 +65,8 @@ module access_control::rbac {
         register_role_internal(account, 0)
     }
 
-    // Register a new role with some expired time.
-    public fun register_role_with_ttl<RoleId>(account: &signer, ttl:u64): (ManageCapability<RoleId>, RemoveCapability<RoleId>) {
+    // Register a new role with some expired time. expired = now_seconds() + ttl
+    public fun register_role_with_ttl<RoleId>(account: &signer, ttl: u64): (ManageCapability<RoleId>, RemoveCapability<RoleId>) {
         register_role_internal(account, ttl)
     }    
 
@@ -74,11 +74,10 @@ module access_control::rbac {
     public fun remove_role<RoleId>(cap:RemoveCapability<RoleId>) acquires RoleStore {
         let r_address = role_address<RoleId>();
         assert!(exists<RoleStore<RoleId>>(r_address), error::not_found(EROLE_ID_NOT_REGISTERED));
-        let RoleStore<RoleId> {expired:_, has_role, grant_events, revoke_events} = move_from<RoleStore<RoleId>>(r_address);
+        let RoleStore<RoleId> {expired: _, has_role, grant_events, revoke_events} = move_from<RoleStore<RoleId>>(r_address);
         smart_table::destroy(has_role);
         event::destroy_handle(grant_events);
         event::destroy_handle(revoke_events);
-
         let RemoveCapability {} = cap;
     }
 
@@ -103,12 +102,12 @@ module access_control::rbac {
     }
 
     /// Asserts if role is not registered or expired or user hasn't been granted yet
-    public fun assert_has_role<RoleId>(account:address) acquires RoleStore {
+    public fun assert_has_role<RoleId>(account: address) acquires RoleStore {
         let r_address = role_address<RoleId>();
         assert!(exists<RoleStore<RoleId>>(r_address),error::not_found(EROLE_ID_NOT_REGISTERED));
         let role = borrow_global<RoleStore<RoleId>>(r_address);
+        // check expired field and assert if role entity already expired
         if (role.expired > 0) {
-            // check expired
             assert!(role.expired > timestamp::now_seconds(), error::permission_denied(EROLE_ID_ROLE_EXPIRED));
         };
         let has_role = *smart_table::borrow_with_default(&role.has_role, account, &false);
@@ -116,12 +115,12 @@ module access_control::rbac {
     }
 
     /// Checks if the role is registered and not expired and user has been granted by this role
-    public fun has_role<RoleId>(account:address): bool acquires RoleStore {
+    public fun has_role<RoleId>(account: address): bool acquires RoleStore {
         let r_address = role_address<RoleId>();
         if (!exists<RoleStore<RoleId>>(r_address)) return false;
         let role = borrow_global<RoleStore<RoleId>>(r_address);
+        // if expired field is set, then return false role entity already expired 
         if (role.expired > 0) {
-            // check ttl
             if (timestamp::now_seconds() > role.expired) return false;
         };
         let has_role = *smart_table::borrow_with_default(&role.has_role, account, &false);
@@ -132,29 +131,27 @@ module access_control::rbac {
         let r_address = role_address<RoleId>();
         assert!(exists<RoleStore<RoleId>>(r_address),error::not_found(EROLE_ID_NOT_REGISTERED));
         let role = borrow_global_mut<RoleStore<RoleId>>(r_address);
-
+        // if role is expired, then grant/revoke operation is not allowed
         if (role.expired > 0) {
-            // check ttl
             assert!(role.expired > timestamp::now_seconds() , error::permission_denied(EROLE_ID_ROLE_EXPIRED));
         };
 
         if (!smart_table::contains(&mut role.has_role, to)) {
+            // user record is NOT present for the role
             if (grant) {
-                smart_table::add(&mut role.has_role, to, true); // grant
+                smart_table::add(&mut role.has_role, to, true); // grant operation
             } else {
-                // revoke
-                abort error::not_found(EROLE_NOT_GRANTED) // not granted yet
+                abort error::not_found(EROLE_NOT_GRANTED) // not granted yet, revoke is not allowed
             };
         } else {
-            // record available
+            // user record is present for the rle
             let exst = smart_table::borrow_mut(&mut role.has_role, to);
             if (grant) {
-                assert!(!*exst, error::not_found(EROLE_ALREADY_GRANTED)); // already granted
+                assert!(!*exst, error::not_found(EROLE_ALREADY_GRANTED)); // error is already granted
             } else {
-                //revoke
-                assert!(*exst, error::not_found(EROLE_ALREADY_REVOKED));
+                assert!(*exst, error::not_found(EROLE_ALREADY_REVOKED)); // error if already revoked
             };                
-            *exst = grant;
+            *exst = grant; // update
         };
 
         // emit events
@@ -163,7 +160,6 @@ module access_control::rbac {
         }else {
             event::emit_event<RevokeRole>(&mut role.revoke_events, RevokeRole { account: to },);
         }
-        
     }
 
     #[view]
@@ -178,7 +174,6 @@ module access_control::rbac {
         if (!is_role_registered<RoleId>()) {
             return false
         };
-
         let role = safe_role_store<RoleId>();
         if (role.expired > 0) {
             (role.expired > timestamp::now_seconds())
@@ -219,6 +214,7 @@ module access_control::rbac {
     }
 
 
+    /// Unit tests
     #[test_only]
     struct Role_A {}
     #[test_only]
