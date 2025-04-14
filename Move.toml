@@ -1,0 +1,14 @@
+[package]
+name = "access_control"
+version = "1.0.0"
+authors = []
+
+[addresses]
+access_control = "0x1203"
+
+[dev-addresses]
+
+[dependencies.SupraFramework]
+git = "https://github.com/Entropy-Foundation/aptos-core.git"
+rev = 'aptosvm-v1.16_supra-v0.4.0'
+subdir = "aptos-move/framework/supra-framework"
