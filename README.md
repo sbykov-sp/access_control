@@ -22,12 +22,16 @@ Or you can define (optionally) some role which automically become invalid (for a
      let (manage_moderator_cap, remove_moderator_cap) = register_role<ModeratorRole>(deployer); // define manager role
      let (manage_bridge_cap, remove_bridge_cap) = register_role<BridgeRole>(deployer); // define bridge role
 
-     // also you have to store capabilities in the global store
-     // capabilities required to grant role to new participants or revoke the role   
+     // you have to store capabilities in the global store for further using
+     // you require a ManageCapability to grant/revoke the role for any particiapant
+     // you require a RemoveCapability to remove the role completely
      ...
  }
 
- /// grant the roles according to your model. Apparantly you can apply `only owner` for that function or register an admin role in the init_module, grant the role and then check assert_has_role<Admin> inside the function. A lot of options
+ /// Method where you grant the roles according to your vision
+ /// Apparantly you can apply `only owner` for that function 
+ /// or even register an admin role in the init_module then grant the admin role 
+ /// and then check assert_has_role<Admin> inside the function you want to protect. A lot of options
  public fun grant_role(to:addresss) {
       grant_role<ModeratorRole>(to, &manage_moderator_cap); // capability should be taken from the global store
       grant_role<BridgeRole>(to, &manage_bridge_cap);  // capability should be taken from the global store  
