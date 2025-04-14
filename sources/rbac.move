@@ -1,10 +1,11 @@
 /// Role based access control module
-/// The main idea described below
-/// 1. Module register any role and receives two capabilities to manage roles (ManageCapability<RoleId>, RemoveCapability<RoleId>)
-/// 2. Module can grant / revoke the role to any user.
-/// 3. Module is able to define the TTL for the new role. This field is immutable. If time is elapsed, then role is not longer valid
-/// 4. Module can utilize assert_has_role inside the code to prevent not authorized access to any function
-/// 5. If module wants to destroy the management capability -- it is possible
+///
+///Module that allows other modules to implement role-based access control mechanisms. This is a lightweight version.
+///
+///In essence, you will be defining multiple roles, each allowed to perform different sets of actions in your module. 
+///An account may have, for example, 'moderator', 'minter' or 'admin' roles, which you will then check inside your logic. Separately, you will be able to define rules for how accounts can be granted a role, have it revoked, and more...
+///Or you can define (optionally) some role which automically become invalid (for all assigned participants) after some period and no need to worry to revoke granted permissions explicitly
+///
 module access_control::rbac {
     
     use aptos_std::signer;
@@ -156,6 +157,7 @@ module access_control::rbac {
             *exst = grant;
         };
 
+        // emit events
         if (grant) {
             event::emit_event<GrantRole>(&mut role.grant_events, GrantRole { account: to },);
         }else {
@@ -222,8 +224,8 @@ module access_control::rbac {
     #[test_only]
     struct Role_B {}    
 
-    #[test(deployer = @access_control, user1 = @0x987, user2 = @0x876)]
-    fun test_register_role(deployer: &signer, user1 : address, user2 : address) acquires RoleStore{
+    #[test(supra = @0x1, deployer = @access_control, user1 = @0x987)]
+    fun test_register_role(supra: &signer, deployer: &signer, user1 : address) acquires RoleStore{
         let deployer_addr = signer::address_of(deployer);
         account::create_account_for_test(deployer_addr);
         let (manage_cap, remove_cap) = register_role<Role_A>(deployer);
@@ -232,10 +234,27 @@ module access_control::rbac {
         assert!(!is_role_registered<Role_B>(), 1); // not registered
 
         assert!(is_role_alive<Role_A>(), 1);
-        assert!(!is_role_alive<Role_B>(), 1);        
+        assert!(!is_role_alive<Role_B>(), 1);
+
+        // role with ttl
+        let t0 = 100001000000;
+        let ttl = 3600;
+        timestamp::set_time_has_started_for_testing(supra);
+        timestamp::update_global_time_for_test_secs(t0);
+        let (manage_cap_b, remove_cap_b) = register_role_with_ttl<Role_B>(deployer, ttl);
+        assert!(is_role_registered<Role_B>(), 1); // registered
+        assert!(is_role_alive<Role_B>(), 1);
+
+        // move time
+        timestamp::fast_forward_seconds(ttl);
+        assert!(is_role_registered<Role_B>(), 1); // registered
+        assert!(!is_role_alive<Role_B>(), 1); // not alive, expired
 
         let ManageCapability<Role_A> {} = manage_cap;
         let RemoveCapability<Role_A> {} = remove_cap;
+
+        let ManageCapability<Role_B> {} = manage_cap_b;
+        let RemoveCapability<Role_B> {} = remove_cap_b;        
     }
 
     #[test(deployer = @access_control, user1 = @0x987, user2 = @0x876)]
@@ -378,7 +397,5 @@ module access_control::rbac {
 
         let ManageCapability<Role_A> {} = manage_cap_a;
         let RemoveCapability<Role_A> {} = remove_cap_a;
-
     }          
-
 }
