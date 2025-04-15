@@ -28,8 +28,6 @@ module access_control::rbac {
     const EROLE_ID_ALREADY_REGISTERED: u64 = 4;
     /// `RoleId` is not registered
     const EROLE_ID_NOT_REGISTERED: u64 = 5;
-    /// TTL is not valid
-    const EROLE_TTL_PAST: u64 = 6;
     /// Role already granted
     const EROLE_ALREADY_GRANTED: u64 = 7;
     /// Role not granted yet
@@ -195,8 +193,6 @@ module access_control::rbac {
         assert!(role_address<RoleId>() == account_addr, error::invalid_argument(EROLE_ID_ADDRESS_MISMATCH));
         assert!(!exists<RoleStore<RoleId>>(account_addr),error::already_exists(EROLE_ID_ALREADY_REGISTERED));
         let expired = if (ttl > 0) {
-            // if ttl is set then it must be a future time
-            assert!(timestamp::now_seconds() > ttl, error::invalid_argument(EROLE_TTL_PAST));
             timestamp::now_seconds() + ttl
         } else {
             0
@@ -214,7 +210,7 @@ module access_control::rbac {
     }
 
 
-    /// Unit tests
+    // Unit tests
     #[test_only]
     struct Role_A {}
     #[test_only]
